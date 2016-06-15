@@ -1,0 +1,19 @@
+(ns game.card-trick1)
+
+(defn color-deal [deck]
+  (loop [deck deck color-piles {:red [] :black []}]
+    (let [c1 (-> deck draw first) c2 (-> deck draw last draw first)]
+      (if (zero? (count deck))
+        color-piles
+        (recur (-> deck draw last draw last)
+               (assoc color-piles
+                      (color c1)
+                      (conj ((color c1) color-piles)
+                            c2)))))))
+
+(defn trick1 [deck]
+  (let [piles (color-deal deck) red (:red piles) black (:black piles)]
+    [(count (filter red-card? red))
+     (count (filter black-card? black))]))
+
+;(trick1 (shuffle new-deck))
