@@ -3,22 +3,11 @@
 (require 'matrix.core)
 (alias 'mCore 'matrix.core)
 
-(def board
-  (with-meta
-    [:wr :wh :wb :wk :wq :wb :wh
-     :wp :wp :wp :wp :wp :wp :wp
-     nil nil nil nil nil nil nil
-     nil nil nil nil nil nil nil
-     nil nil nil nil nil nil nil
-     :bp :bp :bp :bp :bp :bp :bp
-     :br :bh :bb :bk :bq :bb :bh]
-    {:row_cnt 7
-     :col_cnt 7
-     :row_names [:a :b :c :d :e :f :g :h]
-     :col_names [:a :b :c :d :e :f :g :h]}))
-
 (def c4-chars {:wm (char \u26C0)
                :bm (char \u26C2)})
+
+(def windows-c4-chars {:wm (char 2)
+                       :bm (char 1)})
 
 (def new-c4-baord
   (mCore/matrix 7))
@@ -34,41 +23,80 @@
       (dec (.indexOf col (first (filter (complement nil?) col))))
       (:row_cnt (meta board)))))
 
-(def quad-combinations
-  (for [n (range 4) row-index (range 7)] [n row-index]))
+(defn down-right [board row col]
+  (loop [i 0 rtn []]
+    (if (or (= (+ row i) (:row_cnt (meta board)))
+            (= (+ col i) (:row_cnt (meta board))))
+      rtn
+      (recur (inc i) (conj rtn (nth board (mCore/get-pos board [(+ row i) (+ col i)])))))))
 
-(defn get-quad-row [board [n row-index]]
-  (take 4 (drop n (mCore/nth-row board row-index))))
+(defn up-left [board row col]
+  (loop [i 0 rtn []]
+    (if (or (< (- row i) 0)
+            (< (- col i) 0))
+      rtn
+      (recur (inc i) (conj rtn (nth board (mCore/get-pos board [(- row i) (- col i)])))))))
 
-(defn get-quad-col [board [n col-index]]
-  (take 4 (drop n (mCore/nth-col board col-index))))
+(defn up-right [board row col]
+  (loop [i 0 rtn []]
+    (if (or (< (- row i) 0)
+            (= (+ col i) (:row_cnt (meta board))))
+      rtn
+      (recur (inc i) (conj rtn (nth board (mCore/get-pos board [(- row i) (+ col i)])))))))
 
-(defn quadruples [board]
-  (filter #(not-any? nil? %)
-          (concat (map #(get-quad-row board %) quad-combinations)
-                  (map #(get-quad-col board %) quad-combinations))))
-                  ;;get diagonals
+(defn down-left [board row col]
+  (loop [i 0 rtn []]
+    (if (or (= (+ row i) (:row_cnt (meta board)))
+            (< (- col i) 0))
+      rtn
+      (recur (inc i) (conj rtn (nth board (mCore/get-pos board [(+ row i) (- col i)])))))))
 
-(defn winner [board]
-  (cond
-    (not (empty? (filter #(every? #{:bm} %) (quadruples board)))) "bm"
-    (not (empty? (filter #(every? #{:wm} %) (quadruples board)))) "wm"
-    :else nil))
+(defn get-diagonals [board row col]
+  (filter #(< 3 (count %)) (list
+    (concat (reverse (up-left board row col)) (rest (down-right board row col)))
+    (concat (reverse (up-right board row col)) (rest (down-left board row col))))))
 
-(defn c4 
+(defn get-diagonal-quads [dia-vec]
+  (loop [i 0 rtn []]
+    (if (> (+ i 4) (count dia-vec))
+      (filter #(not-any? nil? %) rtn)
+      (recur (inc i)
+             (conj rtn
+                   (take 4 (drop i dia-vec)))))))
+
+(defn get-quads [row-vec col-vec]
+  (loop [i 0 rtn []]
+    (if (= i 4)
+      (filter #(not-any? nil? %) rtn)
+      (recur (inc i)
+             (conj rtn
+                   (take 4 (drop i row-vec))
+                   (take 4 (drop i col-vec)))))))
+
+(defn winner [board row col]
+  (let [quad-lst (concat (get-diagonal-quads (first (get-diagonals board row col)))
+                         (get-diagonal-quads (last  (get-diagonals board row col)))
+                         (get-quads (mCore/nth-row board row) (mCore/nth-col board col)))]
+    (cond
+      (not (empty? (filter #(every? #{:bm} %) quad-lst))) "bm"
+      (not (empty? (filter #(every? #{:wm} %) quad-lst))) "wm"
+      :else nil)))
+
+(defn c4
   ([]
     (c4 true (mCore/matrix 7)))
   ([player board]
     (println (str " 1    2    3    4    5    6    7\n"
-                  (mCore/matrix-str board)
+                  (mCore/matrix-str (replace windows-c4-chars board))
                   "\n\n"
                   (name (player-token player))
                   " enter a number: "))
-    (cond (winner board) (println (name (player-token (not player))) "wins")
-          (full? board) (println "game over.")
-          :else (let [col (dec (. Integer parseInt (read-line)));;make sure to read-line AFTER checking for a winner
-                      row (lowest-row board col)]
-                  (recur (not player) (mCore/matrix-assoc board
-                                                          row
-                                                          col
-                                                          (player-token player)))))))
+    (let [col (dec (. Integer parseInt (read-line)))
+          row (lowest-row board col)
+          new-board (mCore/matrix-assoc board row col (player-token player))]
+      (cond (winner new-board row col) (print (str (name (player-token player))
+                                                   " wins\n"
+                                                   (mCore/matrix-str (replace windows-c4-chars new-board))))
+            (full? board) (println "game over.")
+            :else (recur (not player)
+                         new-board)))))

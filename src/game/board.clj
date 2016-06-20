@@ -43,7 +43,7 @@
       src
       nil)))
 
-(defn board-str [board & [justify _]] 
+(defn board-str [board & [justify _]]
   (mCore/matrix-str board justify))
 
 ;(print (board-str (replace chess-chars new-chess-board)))
